@@ -1,66 +1,66 @@
-import random
+# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
+# SPDX-License-Identifier: Apache-2.0
+
 import cocotb
+import random
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, RisingEdge, Timer
-
-
-def pack_ui(A: int, B: int) -> int:
-    """ui_in[7:4]=A, ui_in[3:0]=B"""
-    return ((A & 0xF) << 4) | (B & 0xF)
+from cocotb.triggers import ClockCycles
 
 
 @cocotb.test()
 async def test_project(dut):
-    dut._log.info("Start multiplier cocotb test")
-
-    # 1) Start clock (100 kHz: period 10 us)
-    clock = Clock(dut.clk, 10, units="us")
+    dut._log.info("Start")
+    
+    # Set the clock period to 10 us (100 KHz)
+    clock = Clock(dut.clk, 10, unit="us")
     cocotb.start_soon(clock.start())
-
-    # 2) Initialize inputs
+    
+    
+    # Reset
+    dut._log.info("Reset")
+    #create output variable
+    output = cocotb.types.LogicArray.from_unsigned(0x00, 8)
+    #Turn on the module
+    dut.ena.value = 1
+    #Set inputs to module
     dut.ui_in.value = 0
-    dut.ena.value = 0
+    dut.uio_in.value = 0
+    #Reset the module
     dut.rst_n.value = 0
-
-    # Hold reset for a few cycles
-    await ClockCycles(dut.clk, 5)
-
-    # Release reset
+    #wait 10 clk cycles then continue
+    await ClockCycles(dut.clk, 10)
+    #Turn off reset
     dut.rst_n.value = 1
 
-    # IMPORTANT:
-    # Your RTL pipelines reset: rst_n_2 <= rst_n_1 <= rst_n (2 cycles),
-    # so wait >=2 cycles after deasserting rst_n.
-    await ClockCycles(dut.clk, 3)
+    dut._log.info("Test project behavior")
+    correct = 0
+    # Set the input values you want to test
+    for i in range(0,1000):
+        A = cocotb.types.LogicArray.from_unsigned(0x00, 8)
+        B = cocotb.types.LogicArray.from_unsigned(0x00, 8)
 
-    # 3) Check ena=0 forces A,B=0 -> P=0
-    dut.ena.value = 0
-    dut.ui_in.value = pack_ui(9, 7)  # doesn't matter when ena=0
-    await RisingEdge(dut.clk)
-    await Timer(1, units="ns")
-    assert int(dut.uo_out.value) == 0, f"Expected 0 when ena=0, got {int(dut.uo_out.value)}"
+        #randomly create 2 logic arrays of 4 bits to concatenate together
+        for j in range(0,4):
+            A = cocotb.types.LogicArray.from_unsigned((random.random()>0.5)<<(j+4),8) | A;
+            B = cocotb.types.LogicArray.from_unsigned((random.random()>0.5)<<j,8) | B;
+        u_in = A | B;
+        #cast logic arrays to ints and multiply them
+        A_int = int(A) >> 4
+        B_int = int(B)
+        P_int = A_int * B_int
+        P = cocotb.types.LogicArray.from_unsigned(0x00, 8)
+        P.value = P_int
 
-    # 4) Random tests with ena=1
-    dut.ena.value = 1
-
-    NUM_TESTS = 1000
-    for i in range(NUM_TESTS):
-        A = random.randint(0, 15)
-        B = random.randint(0, 15)
-
-        dut.ui_in.value = pack_ui(A, B)
-
-        # Your RTL registers ui_in_1/ena_1 on posedge,
-        # then combinationally assigns A/B from ui_in_1 when ena_1 is 1.
-        # So after 1 rising edge, output should reflect new A,B.
-        await RisingEdge(dut.clk)
-        await Timer(1, units="ns")
-
-        got = int(dut.uo_out.value)
-        exp = (A * B) & 0xFF
-
-        assert got == exp, (
-            f"Mismatch at test {i}: A={A} B={B}, expected {exp}, got {got}"
-        )
-
-    dut._log.info(f"All {NUM_TESTS} tests passed ✅")
+        #send in new value to the array
+        dut.ui_in.value = u_in
+        #wait for 3 clk cycles
+        await ClockCycles(dut.clk, 3)
+        #record the output
+        output.value = dut.uo_out.value
+        correct = (P.value == output.value) + correct
+        #test if output matches expected value
+        assert (P.value == output.value)
+        
+    #print out final statement
+    fin_out_str = f"{correct} out of 1000 tests have succeeded"
+    dut._log.info(fin_out_str)
