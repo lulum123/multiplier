@@ -14,7 +14,7 @@ The design takes two 4-bit unsigned operands, A and B, from the Tiny Tapeout inp
 
 The multiplier logic is implemented in the module `mult.v`. This module performs the multiplication operation between the two 4-bit operands. Since the design is purely combinational, the output product is updated immediately whenever the input values change.
 
-The top-level module `top_um_mult_top.v` connects the multiplier module to the standard Tiny Tapeout interface signals. It maps the external input pins (`ui_in`) to the internal signals used by the multiplier and routes the computed product to the output pins (`uo_out`).
+The top-level module `tt_um_mult_top.v` connects the multiplier module to the standard Tiny Tapeout interface signals. It maps the external input pins (`ui_in`) to the internal signals used by the multiplier and routes the computed product to the output pins (`uo_out`).
 
 Pin mapping is defined as follows:
 
